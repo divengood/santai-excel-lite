@@ -1,0 +1,5 @@
+{
+  "name": "Lite Excel",
+  "description": "A lightweight, web-based spreadsheet application that allows users to work with data in a grid, perform calculations using formulas, and manage rows and columns dynamically. It provides a familiar interface for basic data manipulation and analysis.",
+  "requestFramePermissions": []
+}
