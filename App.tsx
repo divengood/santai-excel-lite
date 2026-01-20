@@ -93,26 +93,73 @@ const App: React.FC = () => {
         });
     }, [selection]);
 
+    const getActiveCellId = useCallback(() => {
+        if (selection.type === 'cell') return selection.id;
+        if (selection.type === 'range') return selection.startId;
+        return null;
+    }, [selection]);
+
+    const handleCopy = useCallback(async () => {
+        const activeId = getActiveCellId();
+        if (activeId && gridData[activeId]) {
+            try {
+                await navigator.clipboard.writeText(gridData[activeId].rawValue);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    }, [getActiveCellId, gridData]);
+
+    const handlePaste = useCallback(async () => {
+        const activeId = getActiveCellId();
+        if (activeId) {
+            try {
+                const text = await navigator.clipboard.readText();
+                handleCellChange(activeId, text);
+            } catch (err) {
+                console.error('Failed to read clipboard: ', err);
+            }
+        }
+    }, [getActiveCellId, handleCellChange]);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const activeElement = document.activeElement;
+            // Don't trigger shortcuts if an input is focused (e.g. FormulaBar or Cell editor)
             if (activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)) {
                 return;
             }
 
+            const isModKey = e.metaKey || e.ctrlKey;
+
+            // Delete / Backspace
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
                 if (selection.type === 'cell') {
                     handleCellChange(selection.id, '');
                 } else if (selection.type === 'range') {
-                    handleClearSelection();
+                    if (selection.startId === selection.endId) {
+                        handleCellChange(selection.startId, '');
+                    } else {
+                        handleClearSelection();
+                    }
                 }
+            }
+
+            // Copy
+            if (isModKey && e.key.toLowerCase() === 'c') {
+                handleCopy();
+            }
+
+            // Paste
+            if (isModKey && e.key.toLowerCase() === 'v') {
+                handlePaste();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selection, handleCellChange, handleClearSelection]);
+    }, [selection, handleCellChange, handleClearSelection, handleCopy, handlePaste]);
     
     useEffect(() => {
         const handleMouseUp = () => setIsDragging(false);
@@ -155,6 +202,7 @@ const App: React.FC = () => {
     
     const handleCellMouseDown = (cellId: string) => {
         setIsDragging(true);
+        // Start by selecting just this cell. If mouse moves, it becomes a range.
         handleSetSelection({ type: 'range', startId: cellId, endId: cellId });
     };
 
@@ -524,11 +572,6 @@ const App: React.FC = () => {
         setColCount(prev => prev + numToDuplicate);
     }, [selection, gridData, rowCount, colCount]);
 
-    const getActiveCellId = () => {
-        if (selection.type === 'cell') return selection.id;
-        if (selection.type === 'range') return selection.startId;
-        return null;
-    }
     const activeCellId = getActiveCellId();
     const activeCellData = activeCellId ? gridData[activeCellId] : null;
 
