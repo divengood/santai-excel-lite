@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CellData, Selection } from './types';
 import Grid from './components/Grid';
 import Toolbar from './components/Toolbar';
@@ -30,6 +30,8 @@ const App: React.FC = () => {
     const [selection, setSelection] = useState<Selection>({ type: 'cell', id: 'A1' });
     const [lastClickedHeader, setLastClickedHeader] = useState<{ type: 'row' | 'col', index: number } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isDraggingFile, setIsDraggingFile] = useState(false);
+    const dragCounter = useRef(0);
 
     const recalculateSheet = useCallback(() => {
         setGridData(currentGrid => {
@@ -189,10 +191,7 @@ const App: React.FC = () => {
         setColCount(newColCount);
     };
 
-    const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-    
+    const processFile = (file: File) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
@@ -226,8 +225,58 @@ const App: React.FC = () => {
             }
         };
         reader.readAsBinaryString(file);
-    
+    };
+
+    const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            processFile(file);
+        }
         e.target.value = ''; // Reset file input
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDraggingFile(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDraggingFile(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingFile(false);
+        dragCounter.current = 0;
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            const validExtensions = ['.xlsx', '.xls', '.csv'];
+            const fileName = file.name.toLowerCase();
+            const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+            
+            if (isValid) {
+                processFile(file);
+            } else {
+                alert("Please drop a valid Excel or CSV file.");
+            }
+            e.dataTransfer.clearData();
+        }
     };
     
     const handleFileSave = useCallback(() => {
@@ -484,7 +533,27 @@ const App: React.FC = () => {
     const activeCellData = activeCellId ? gridData[activeCellId] : null;
 
     return (
-        <div className="flex flex-col h-screen font-sans text-gray-800">
+        <div 
+            className="relative flex flex-col h-screen font-sans text-gray-800"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            {isDraggingFile && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-40 backdrop-blur-sm pointer-events-none border-4 border-dashed border-white m-4 rounded-xl">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center space-y-4">
+                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                        </div>
+                        <p className="text-xl font-bold text-gray-800">Drop your spreadsheet here</p>
+                        <p className="text-sm text-gray-500">Supports .xlsx, .xls, and .csv</p>
+                    </div>
+                </div>
+            )}
+
             <header className="bg-white shadow-md p-2 flex-shrink-0">
                 <h1 className="text-xl font-bold text-gray-700">Lite Excel</h1>
             </header>
