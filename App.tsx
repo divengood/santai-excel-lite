@@ -74,21 +74,28 @@ const App: React.FC = () => {
     }, []);
     
     const handleClearSelection = useCallback(() => {
-        if (selection.type !== 'range') return;
-
-        const rangeCoords = getRangeCoords(selection.startId, selection.endId);
-        if (!rangeCoords) return;
-
-        const { minRow, minCol, maxRow, maxCol } = rangeCoords;
-        
         setGridData(prev => {
             const newGrid = {...prev};
-            for (let r = minRow; r <= maxRow; r++) {
-                for (let c = minCol; c <= maxCol; c++) {
-                    const cellId = coordsToCellId(r, c);
-                    newGrid[cellId] = { rawValue: '', calculatedValue: '' };
+            
+            if (selection.type === 'range') {
+                const rangeCoords = getRangeCoords(selection.startId, selection.endId);
+                if (rangeCoords) {
+                    const { minRow, minCol, maxRow, maxCol } = rangeCoords;
+                    for (let r = minRow; r <= maxRow; r++) {
+                        for (let c = minCol; c <= maxCol; c++) {
+                            const cellId = coordsToCellId(r, c);
+                            newGrid[cellId] = { rawValue: '', calculatedValue: '' };
+                        }
+                    }
                 }
+            } else if (selection.type === 'multiple') {
+                selection.ids.forEach(id => {
+                    newGrid[id] = { rawValue: '', calculatedValue: '' };
+                });
+            } else if (selection.type === 'cell') {
+                newGrid[selection.id] = { rawValue: '', calculatedValue: '' };
             }
+            
             return newGrid;
         });
     }, [selection]);
@@ -96,19 +103,23 @@ const App: React.FC = () => {
     const getActiveCellId = useCallback(() => {
         if (selection.type === 'cell') return selection.id;
         if (selection.type === 'range') return selection.startId;
+        if (selection.type === 'multiple') return selection.anchorId;
         return null;
     }, [selection]);
 
     const handleCopy = useCallback(async () => {
         const activeId = getActiveCellId();
-        if (activeId && gridData[activeId]) {
+        if (selection.type === 'multiple') {
+            const values = selection.ids.map(id => gridData[id]?.rawValue || '').join(', ');
+            await navigator.clipboard.writeText(values);
+        } else if (activeId && gridData[activeId]) {
             try {
                 await navigator.clipboard.writeText(gridData[activeId].rawValue);
             } catch (err) {
                 console.error('Failed to copy text: ', err);
             }
         }
-    }, [getActiveCellId, gridData]);
+    }, [getActiveCellId, gridData, selection]);
 
     const handlePaste = useCallback(async () => {
         const activeId = getActiveCellId();
@@ -125,33 +136,21 @@ const App: React.FC = () => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const activeElement = document.activeElement;
-            // Don't trigger shortcuts if an input is focused (e.g. FormulaBar or Cell editor)
             if (activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)) {
                 return;
             }
 
             const isModKey = e.metaKey || e.ctrlKey;
 
-            // Delete / Backspace
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
-                if (selection.type === 'cell') {
-                    handleCellChange(selection.id, '');
-                } else if (selection.type === 'range') {
-                    if (selection.startId === selection.endId) {
-                        handleCellChange(selection.startId, '');
-                    } else {
-                        handleClearSelection();
-                    }
-                }
+                handleClearSelection();
             }
 
-            // Copy
             if (isModKey && e.key.toLowerCase() === 'c') {
                 handleCopy();
             }
 
-            // Paste
             if (isModKey && e.key.toLowerCase() === 'v') {
                 handlePaste();
             }
@@ -200,10 +199,33 @@ const App: React.FC = () => {
         }
     };
     
-    const handleCellMouseDown = (cellId: string) => {
-        setIsDragging(true);
-        // Start by selecting just this cell. If mouse moves, it becomes a range.
-        handleSetSelection({ type: 'range', startId: cellId, endId: cellId });
+    const handleCellMouseDown = (cellId: string, e: React.MouseEvent) => {
+        const { shiftKey, metaKey, ctrlKey } = e;
+        const activeId = getActiveCellId() || 'A1';
+
+        if (shiftKey) {
+            setSelection({ type: 'range', startId: activeId, endId: cellId });
+        } else if (metaKey || ctrlKey) {
+            setSelection(prev => {
+                let newIds: string[] = [];
+                if (prev.type === 'multiple') {
+                    newIds = prev.ids.includes(cellId) 
+                        ? prev.ids.filter(id => id !== cellId)
+                        : [...prev.ids, cellId];
+                } else if (prev.type === 'cell') {
+                    newIds = [prev.id, cellId];
+                } else if (prev.type === 'range') {
+                    // For simplicity, convert range to individual cell list if Cmd is pressed
+                    newIds = [prev.startId, cellId]; 
+                } else {
+                    newIds = [cellId];
+                }
+                return { type: 'multiple', ids: newIds, anchorId: cellId };
+            });
+        } else {
+            setIsDragging(true);
+            handleSetSelection({ type: 'range', startId: cellId, endId: cellId });
+        }
     };
 
     const handleCellMouseOver = (cellId: string) => {

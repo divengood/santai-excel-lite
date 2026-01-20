@@ -7,7 +7,7 @@ interface CellProps {
     data: CellData;
     isSelected: boolean;
     isHighlighted: boolean;
-    onMouseDown: () => void;
+    onMouseDown: (e: React.MouseEvent) => void;
     onMouseOver: () => void;
     onCommit: (cellId: string, value: string) => void;
 }
@@ -30,8 +30,8 @@ const Cell: React.FC<CellProps> = ({ cellId, data, isSelected, isHighlighted, on
         }
     }, [isSelected, isEditing]);
 
-    const handleDoubleClick = () => {
-        onMouseDown();
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        onMouseDown(e);
         setIsEditing(true);
         setEditValue(data.rawValue);
     };
@@ -85,7 +85,7 @@ const Cell: React.FC<CellProps> = ({ cellId, data, isSelected, isHighlighted, on
         <td
             className={cellClasses}
             onDoubleClick={handleDoubleClick}
-            onMouseDown={onMouseDown}
+            onMouseDown={(e) => onMouseDown(e)}
             onMouseOver={onMouseOver}
         >
             {data.calculatedValue}

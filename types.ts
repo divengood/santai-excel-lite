@@ -10,4 +10,5 @@ export type Selection =
   | { type: 'row'; indices: number[] }
   | { type: 'col'; indices: number[] }
   | { type: 'range'; startId: string; endId: string }
+  | { type: 'multiple'; ids: string[]; anchorId: string }
   | { type: 'none' };

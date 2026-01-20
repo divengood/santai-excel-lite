@@ -11,7 +11,7 @@ interface GridProps {
     selection: Selection;
     onCellChange: (cellId: string, rawValue: string) => void;
     onHeaderClick: (type: 'row' | 'col', index: number, e: React.MouseEvent) => void;
-    onCellMouseDown: (cellId: string) => void;
+    onCellMouseDown: (cellId: string, e: React.MouseEvent) => void;
     onCellMouseOver: (cellId: string) => void;
 }
 
@@ -67,6 +67,9 @@ const Grid: React.FC<GridProps> = ({ gridData, rowCount, colCount, selection, on
                                     }
                                 } else if (selection.type === 'cell') {
                                     isSelected = selection.id === cellId;
+                                } else if (selection.type === 'multiple') {
+                                    isHighlighted = selection.ids.includes(cellId);
+                                    isSelected = selection.anchorId === cellId;
                                 } else {
                                      isHighlighted = isRowSelected || (selection.type === 'col' && selection.indices.includes(colIndex));
                                 }
@@ -78,7 +81,7 @@ const Grid: React.FC<GridProps> = ({ gridData, rowCount, colCount, selection, on
                                         data={gridData[cellId] || { rawValue: '', calculatedValue: '' }}
                                         isSelected={isSelected}
                                         isHighlighted={isHighlighted}
-                                        onMouseDown={() => onCellMouseDown(cellId)}
+                                        onMouseDown={(e) => onCellMouseDown(cellId, e)}
                                         onMouseOver={() => onCellMouseOver(cellId)}
                                         onCommit={handleCellCommit}
                                     />
